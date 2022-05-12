@@ -27,7 +27,7 @@ public class Iinstruction extends Instruction {
 
     public String toString(){
         StringBuilder sb = new StringBuilder();
-        sb.append("opcode" + spaces(4) + "R1" + spaces(5) + "R2" + spaces(8) + "Immediate" + "\n");
+        sb.append(spaces(19) + "opcode" + spaces(4) + "R1" + spaces(5) + "R2" + spaces(8) + "Immediate" + "\n");
         sb.append(spaces(20) + getBinaryString(getOpcode(), 4) + spaces(3) + getBinaryString(getR1(), 5) + spaces(2)
                 + getBinaryString(getR2(), 5) + spaces(4) + getBinaryString(getImmediate(), 18) + "\n");
         sb.append(spaces(20) + "----------------------------------------" + "\n");

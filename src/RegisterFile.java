@@ -1,18 +1,18 @@
 public class RegisterFile {
 
-    public Word [] registers;
+    public int [] registers;
     public int pc;
     public final int zeroRegister = 0;
 
     public RegisterFile(){
-        registers = new Word[31];
+        registers = new int[31];
     }
 
     public void setRegister(int reg, int value){
-        registers[reg] = new Word(value);
+        registers[reg] = value;
     }
 
-    public Word getRegister(int reg){
+    public int getRegister(int reg){
         return registers[reg];
     }
 

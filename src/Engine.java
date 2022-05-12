@@ -1,8 +1,6 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.HashMap;
-import java.util.Scanner;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class Engine {
 
@@ -13,8 +11,9 @@ public class Engine {
     public static RegisterFile registerFile;
     public static int mp; // memory pointer
     public static int size; // program size
-    public static activeInstruction activeInstruction; // current executing Instruction
-    public static Instruction fetchedInstruction; // the currently fetched instruction
+    public static Queue<Integer> fetch;
+    public static Queue<Instruction> decode;
+    public static Queue<Instruction> execute;
 
     public Engine(){
         init();
@@ -27,9 +26,9 @@ public class Engine {
         memory = new Memory();
         registerFile = new RegisterFile();
 
-        for (int i = 0; i < registerFile.registers.length; i++) {
-            registerFile.setRegister(i, 0);
-        }
+        fetch = new ArrayDeque<>();
+        decode = new ArrayDeque<>();
+        execute = new ArrayDeque<>();
 
         // opcodes
         {
@@ -99,30 +98,10 @@ public class Engine {
     public void parseLine(String line) throws Exception {
 
         StringTokenizer st = new StringTokenizer(line);
-        String instruction = st.nextToken();
-        int opcode = opcodes.get(instruction);
-
-        if(types.get(instruction) == 'R'){
-            int r1 = Integer.parseInt(st.nextToken().charAt(1) + "") - 1;
-            int r2 = Integer.parseInt(st.nextToken().charAt(1) + "") - 1;
-            int r3 = Integer.parseInt(st.nextToken().charAt(1) + "") - 1;
-            encode('R',opcode, r1, r2, r3, 0, 0);
+        encode(st.nextToken(), st.nextToken(), st.nextToken(), st.nextToken());
+        if (st.hasMoreTokens()) {
+            throw new Exception("Invalid instruction");
         }
-
-        else if(types.get(instruction) == 'I'){
-            int r1 = Integer.parseInt(st.nextToken().charAt(1) + "") - 1;
-            int r2 = Integer.parseInt(st.nextToken().charAt(1) + "") - 1;
-            int immediate = Integer.parseInt(st.nextToken());
-            encode('I', opcode, r1, r2, 0, immediate, 0);
-        }
-        else if(types.get(instruction) == 'J'){
-            int address = Integer.parseInt(st.nextToken());
-            encode('J', opcode, 0, 0, 0, 0, address);
-        }
-        else{
-            throw new Exception("Invalid instruction: " + instruction);
-        }
-
     }
 
     public void parseFile(String path) throws FileNotFoundException {
@@ -142,97 +121,136 @@ public class Engine {
 
     }
 
-    public void encode(char type, int opcode, int r1, int r2, int r3, int immediate, int address){
-        int word = 0;
-        if (type == 'R') {
-            word = (opcode << 28) | (r1 << 23) | (r2 << 18) | (r3 << 13);
-            memory.storeWord(mp, 0, new RInstruction(word));
+    public void encode(String operation, String oprand1, String oprand2, String oprand3){
+        int value;
+        if (types.get(operation) == 'R') {
+            int opcode = opcodes.get(operation);
+            int r1 = Integer.parseInt(oprand1.charAt(1) + "") - 1;
+            int r2 = Integer.parseInt(oprand2.charAt(1) + "") - 1;
+            int r3 = Integer.parseInt(oprand3.charAt(1) + "") - 1;
+            value = (opcode << 28) | (r1 << 23) | (r2 << 18) | (r3 << 13);
+            memory.storeWord(mp, value);
         }
-        else if (type == 'I') {
-            word = (opcode << 28) | (r1 << 23) | (r2 << 18) | immediate;
-            memory.storeWord(mp, 0, new Iinstruction(word));
+        else if (types.get(operation) == 'I') {
+            int opcode = opcodes.get(operation);
+            int r1 = Integer.parseInt(oprand1.charAt(1) + "") - 1;
+            int r2 = Integer.parseInt(oprand2.charAt(1) + "") - 1;
+            int immediate = Integer.parseInt(oprand3);
+            value = (opcode << 28) | (r1 << 23) | (r2 << 18) | immediate;
+            memory.storeWord(mp, value);
         }
         else {
-            word = (opcode << 28) | address;
-            memory.storeWord(mp, 0, new JInstruction(word));
+            int opcode = opcodes.get(operation);
+            int address = Integer.parseInt(oprand1);
+            value = (opcode << 28) | address;
+            memory.storeWord(mp, value);
         }
     }
 
     public void execute(){
-        switch (activeInstruction.getInstructionMnemonic()) {
-            case "ADD":
-                registerFile.setRegister(activeInstruction.getR1(),
-                        registerFile.getRegister(2).getWord() + registerFile.getRegister(activeInstruction.getR3()).getWord());
-                break;
-            case "SUB":
-                registerFile.setRegister(activeInstruction.getR1(),
-                        registerFile.getRegister(2).getWord() - registerFile.getRegister(activeInstruction.getR3()).getWord());
-                break;
-            case "MULI":
-                registerFile.setRegister(activeInstruction.getR1(), registerFile.getRegister(2).getWord() * activeInstruction.getImmediate());
-                break;
-            case "ADDI":
-                registerFile.setRegister(activeInstruction.getR1(), registerFile.getRegister(2).getWord() + activeInstruction.getImmediate());
-                break;
-            case "BNE":
-            {
-                if (registerFile.getRegister(1).getWord() != registerFile.getRegister(activeInstruction.getR2()).getWord()) {
-                    registerFile.setPC(registerFile.getPC() + 1 + activeInstruction.getImmediate());
-                }
+        Instruction instruction = decode.poll();
+        execute.add(instruction);
+
+        switch (instruction != null ? instruction.getOpcode() : 0) {
+            // ADD
+            case 0 -> {
+                RInstruction ri = (RInstruction) instruction;
+                int value = registerFile.getRegister(ri.getR2()) + registerFile.getRegister(ri.getR3());
+                registerFile.setRegister(ri.getR1(), value);
             }
-            break;
-            case "ANDI":
-                registerFile.setRegister(activeInstruction.getR1(), registerFile.getRegister(2).getWord() & activeInstruction.getImmediate());
-                break;
-            case "ORI":
-                registerFile.setRegister(activeInstruction.getR1(), registerFile.getRegister(2).getWord() | activeInstruction.getImmediate());
-                break;
-            case "J":
-                registerFile.setPC(activeInstruction.getAddress());
-                break;
-            case "SLL":
-                registerFile.setRegister(activeInstruction.getR1(),
-                        registerFile.getRegister(activeInstruction.getR2()).getWord() << activeInstruction.getShamt());
-                break;
-            case "SRL":
-                registerFile.setRegister(activeInstruction.getR1(),
-                        registerFile.getRegister(activeInstruction.getR2()).getWord() >> activeInstruction.getShamt());
-                break;
-            case "LW":
-                registerFile.setRegister(activeInstruction.getR1(),
-                        memory.loadWord(registerFile.getRegister(activeInstruction.getR2()).getWord() + activeInstruction.getImmediate()).getWord());
-                break;
-            case "SW":
-                memory.storeWord(registerFile.getRegister(activeInstruction.getR2()).getWord() + activeInstruction.getImmediate() + 1023,
-                        registerFile.getRegister(activeInstruction.getR1()).getWord(), null);
-                break;
-            default:
-                System.out.println("Error: Invalid instruction");
+            // SUB
+            case 1 -> {
+                RInstruction ri = (RInstruction) instruction;
+                int value = registerFile.getRegister(ri.getR2()) - registerFile.getRegister(ri.getR3());
+                registerFile.setRegister(ri.getR1(), value);
+            }
+            // sLL
+            case 2 -> {
+                RInstruction ri = (RInstruction) instruction;
+                int value = registerFile.getRegister(ri.getR2()) << ri.getShamt();
+                registerFile.setRegister(ri.getR1(), value);
+            }
+            // sRL
+            case 3 -> {
+                RInstruction ri = (RInstruction) instruction;
+                int value = registerFile.getRegister(ri.getR2()) >> ri.getShamt();
+                registerFile.setRegister(ri.getR1(), value);
+            }
+            // MULI
+            case 4 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                int value = registerFile.getRegister(ii.getR2()) * ii.getImmediate();
+                registerFile.setRegister(ii.getR1(), value);
+            }
+            // ADDI
+            case 5 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                int value = registerFile.getRegister(ii.getR2()) + ii.getImmediate();
+                registerFile.setRegister(ii.getR1(), value);
+            }
+            // BNQ
+            case 6 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                registerFile.setPC(registerFile.getRegister(ii.getR1()) != registerFile.getRegister(ii.getR2()) ?
+                        (registerFile.getPC() + 1 + ii.getImmediate()) : registerFile.getPC());
+            }
+            // ANDI
+            case 7 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                int value = registerFile.getRegister(ii.getR2()) & ii.getImmediate();
+                registerFile.setRegister(ii.getR1(), value);
+            }
+            // ORI
+            case 8 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                int value = registerFile.getRegister(ii.getR2()) | ii.getImmediate();
+                registerFile.setRegister(ii.getR1(), value);
+            }
+            // LW
+            case 9 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                registerFile.setRegister(ii.getR1(), memory.loadWord(registerFile.getRegister(ii.getR2()) + ii.getImmediate()));
+            }
+            // SW
+            case 10 -> {
+                Iinstruction ii = (Iinstruction) instruction;
+                memory.storeWord(registerFile.getRegister(ii.getR2()) + ii.getImmediate(), registerFile.getRegister(ii.getR1()));
+            }
+            case 11 -> {
+
+            }
+            default -> {
+                System.out.println("Unknown instruction");
+            }
         }
+
+
     }
 
-    public void decode(){
-        String Mnemonic = operations.get(fetchedInstruction.getOpcode());
+    public void decode() {
 
-        if (types.get(Mnemonic) == 'R') {
-            RInstruction currentRInstruction = (RInstruction) fetchedInstruction;
-            activeInstruction = new activeInstruction(Mnemonic, currentRInstruction.getR1(), currentRInstruction.getR2(),
-                    currentRInstruction.getR3(), currentRInstruction.getShamt());
+        int value = fetch.poll();
+        int opcode = (value >> 28) & 0xf;
+
+        if(opcode <= 3) {
+            RInstruction rInstruction = new RInstruction(value);
+            decode.add(rInstruction);
         }
-        else if (types.get(Mnemonic) == 'I') {
-            Iinstruction currentIInstruction = (Iinstruction) fetchedInstruction;
-            activeInstruction = new activeInstruction(Mnemonic, currentIInstruction.getR1(), currentIInstruction.getR2(),
-                    currentIInstruction.getImmediate());
+        else if (opcode <= 10) {
+            Iinstruction iInstruction = new Iinstruction(value);
+            decode.add(iInstruction);
+        }
+        else if (opcode == 11) {
+            JInstruction jInstruction = new JInstruction(value);
+            decode.add(jInstruction);
         }
         else {
-            JInstruction currentJInstruction = (JInstruction) fetchedInstruction;
-            activeInstruction = new activeInstruction(Mnemonic, currentJInstruction.getAddress());
-
+            System.out.println("Error: Invalid instruction");
         }
     }
 
     public void fetch()  {
-        fetchedInstruction = (Instruction) memory.loadWord(registerFile.getPC());
+         fetch.add(memory.loadWord(registerFile.getPC()));
         registerFile.setPC(registerFile.getPC() + 1);
     }
 
@@ -242,17 +260,6 @@ public class Engine {
     public static void main(String[] args) throws FileNotFoundException {
         Engine e = new Engine();
         e.parseFile("\\\\wsl$\\Ubuntu\\home\\amir\\Program.txt"); // <<- this is my path to the file put yours here
-        //memory.printMemo(); // try this beauty print :) i spent some time on this
-
-        /*
-        for (int i = 0; i < 4; i++) {
-            e.fetch();
-            e.decode();
-            e.execute();
-        }
-        */
-        memory.printMemo();
-
     }
 
 

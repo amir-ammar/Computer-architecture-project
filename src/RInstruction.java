@@ -35,7 +35,7 @@ public class RInstruction extends Instruction {
 
     public String toString(){
         StringBuilder sb = new StringBuilder();
-        sb.append("opcode" + spaces(3) + "R1" + spaces(6) + "R2" + spaces(4) + "R3" + spaces(9) + "shamt" + "\n");
+        sb.append(spaces(19) + "opcode" + spaces(3) + "R1" + spaces(6) + "R2" + spaces(4) + "R3" + spaces(9) + "shamt" + "\n");
         sb.append(spaces(20) + getBinaryString(getOpcode(), 4) + spaces(3) + getBinaryString(getR1(), 5) + spaces(2)
                 + getBinaryString(getR2(), 5) + spaces(2) + getBinaryString(getR3(), 5) +
                 spaces(4) + getBinaryString(getShamt(), 13) + "\n");

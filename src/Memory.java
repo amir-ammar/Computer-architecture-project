@@ -1,34 +1,30 @@
 public class Memory {
 
-    public Word [] memo;
+    public int [] memo;
 
     public Memory(){
-        memo = new Word[2048];
+        memo = new int[2048];
     }
 
-    public void storeWord(int address, int value, Word word){ // to differentiate between storing a reference or a value
-        if (word == null) {
-            memo[address] = new Word(value);
-        }
-        else {
-            memo[address] = word;
-        }
+    public void storeWord(int address, int value){
+        memo[address] = value;
     }
 
-    public Word loadWord(int address){
+    public int loadWord(int address){
         return memo[address];
     }
 
     public String spaces(int n){
-        String spaces = "";
+        StringBuilder spaces = new StringBuilder();
         for(int i = 0; i < n; i++){
-            spaces += " ";
+            spaces.append(" ");
         }
-        return spaces;
+        return spaces.toString();
     }
 
+
     // print the memory
-    public void printMemo(){
+    /*public void printMemo(){
         System.out.println(spaces(22) + "Welcome to our fantastic memory!");
         System.out.println(spaces(22) + "----------------------------------");
         for(int i = 0; i < memo.length; i++){
@@ -36,7 +32,5 @@ public class Memory {
                 System.out.println(spaces(16) + i + ": " + memo[i].toString());
             }
         }
-    }
-
-
+    }*/
 }
